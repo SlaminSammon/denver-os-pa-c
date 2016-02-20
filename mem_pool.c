@@ -43,6 +43,7 @@ typedef struct _pool_mgr {
     unsigned total_nodes;
     unsigned used_nodes;
     gap_pt gap_ix;
+    unsigned gap_ix_capacity;
 } pool_mgr_t, *pool_mgr_pt;
 
 
@@ -68,6 +69,19 @@ static alloc_status _mem_sort_gap_ix(pool_mgr_pt pool_mgr);
 
 
 /* Definitions of user-facing functions */
+
+/*
+* Function Name: mem_init
+* Passed Variables: None
+* Return Type: alloc_status
+* Purpose: To intialize the pool store. The pool store is an array,
+* of all the pool managers being used within the program.
+* This array is the size of the variable MEM_POOL_STORE_INIT_CAPACITY
+* which is 20, giving us space for 20 pool_managers. In case this function
+* is called when the pool store has already been intialized, thre is a check to
+* not reintialize the pool_store. If the allocation fails then the function
+* returns ALLOC_FAIL.
+*/
 alloc_status mem_init() {
     // TODO implement
 
@@ -77,12 +91,11 @@ alloc_status mem_init() {
 		return ALL0C_CALLED_AGAIN;
 	}
 	//Allocate room for the initial amount pool store capacity
-	pool_store = (pool_mgr_pt *)calloc(MEM_POOL_STORE_INIT_CAPACITY, sizeof(pool_mgr_t); 
+	pool_store = (pool_mgr_pt *)calloc(MEM_POOL_STORE_INIT_CAPACITY, sizeof(pool_mgr_t));
 	//If our allocation went correctly
 	if (pool_store != NULL){
 		//Set the size and capacity of the pool store
 		pool_store_size = MEM_POOL_STORE_INIT_CAPACITY;
-		pool_store_capacity = 0;
 
 		return ALLOC_OK;
 	}
@@ -96,6 +109,15 @@ alloc_status mem_free() {
     return ALLOC_FAIL;
 }
 
+/*
+ * Function Name: mem_pool_open
+ * Passed Variables: size_t size, alloc_policy policy
+ * Return Type: pool_pt
+ * Purpose: This function creates a new pool of memory of the passed size.
+ * This is put into a new pool_mgr that has all of it's default values set.
+ * The pool's default values are also set. These default values are set using
+ * constant value specified at the start of the file.
+ */
 pool_pt mem_pool_open(size_t size, alloc_policy policy) {
     // If the array of pool stores hasn't been allocated then allocate it.
 	if (pool_store == NULL){
@@ -123,7 +145,7 @@ pool_pt mem_pool_open(size_t size, alloc_policy policy) {
 	(*manager).pool.alloc_size = size;
 	(*manager).pool.mem = malloc(size);
 
-	if ((*manager).mem == NULL){
+	if ((*manager).pool.mem == NULL){
 		free((*manager).pool.mem);//delete the memory allocation
 		free(manager);//delete the allocation of the pool store.
 		//Restore these states to their pre function states.
@@ -135,7 +157,7 @@ pool_pt mem_pool_open(size_t size, alloc_policy policy) {
 	//Allocate the node heap and gap index
 	(*manager).gap_ix = calloc(MEM_GAP_IX_INIT_CAPACITY, sizeof(gap_t));
 	(*manager).node_heap = calloc(MEM_NODE_HEAP_INIT_CAPACITY, sizeof(gap_t));
-	if ((*manager), node_heap == NULL || (*manager).gap_ix == NULL){
+	if ((*manager).node_heap == NULL || (*manager).gap_ix == NULL){
 		//Free all allocated memory
 		free((*manager).node_heap);
 		free((*manager).gap_ix);
@@ -149,22 +171,31 @@ pool_pt mem_pool_open(size_t size, alloc_policy policy) {
 	//Initialize all gap and node members.
 	(*manager).total_nodes = MEM_NODE_HEAP_INIT_CAPACITY;
 	(*manager).used_nodes = 0;
+    (*manager).gap_ix_capacity = MEM_GAP_IX_INIT_CAPACITY;
 
-	(*manager).total_gaps = MEM_NODE_GAP_IX_CAPACITY;
-	(*manager).used_gaps = 0;
 
-    return (pool_pt) (*manager).pool;
+    return (pool_pt) manager;
 }
 
+/*
+ * Function Name: mem_pool_close
+ * Passed Variables: pool_pt pool
+ * Return Type: alloc_status
+ * Purpose: This function deletes a pool from memory. Alongside the pool
+ * all allocated memory is deleted and the pool's manager is removed
+ * from the pool store array. If the pool is not aember of any of the pool
+ * managers then the function returns ALLOC_NOT_FREED telling the program that
+ * the pool was not deallocated.
+ */
 alloc_status mem_pool_close(pool_pt pool) {
     // TODO implement
-	pool_mgr_pt manager;
+    pool_mgr_pt manager= NULL;
 
 	//Go through the pool store array if two pools match then thay
 	//pool_mgr will become our target for deletion
 	unsigned int bool = 0, i = 0;
-	for (i = 0; i < pool_store_capacity){
-		if ((*pool_store[i]).pool == (*pool)){
+    for (i = 0; i < pool_store_capacity; ++i){
+		if (&(*pool_store[i]).pool == pool){
 			manager = pool_store[i];
 			//Check to see if this is the last element in the array.
 			if (i == pool_store_capacity - 1){
@@ -183,7 +214,7 @@ alloc_status mem_pool_close(pool_pt pool) {
 	}
 	else{
 		pool_store[i] = pool_store[pool_store_capacity - 1];
-		pool_store[pool_store_capacity - 1] = NULL
+        pool_store[pool_store_capacity - 1] = NULL;
 	}
 	//free all allocated memory
 	free((*manager).pool.mem);
@@ -216,14 +247,47 @@ void mem_inspect_pool(pool_pt pool, pool_segment_pt segments, unsigned *num_segm
 /* Definitions of static functions */
 static alloc_status _mem_resize_pool_store() {
     // TODO implement
-
-    return ALLOC_FAIL;
+    /* Check to see if we have too many pools. */
+    if(pool_store_size > pool_store_capacity * MEM_POOL_STORE_FILL_FACTOR){
+        /* Create a new pool manager that is a reallocated 'pool_store' */
+        pool_mgr_pt* reallocated_store = (pool_mgr_pt *) realloc(pool_store, pool_store_capacity* MEM_POOL_STORE_EXPAND_FACTOR * sizeof(pool_mgr_pt));
+        if(reallocated_store == NULL){
+            /* If the allocation failed then we return a fail state. */
+            return ALLOC_FAIL;
+        }
+        else{
+            /* Set the pool_store to the newly allocated pool_store 'reallocated_store*/
+            pool_store = reallocated_store;
+        }
+        return ALLOC_OK;
+    }
+    /* If we don't have too many pools then we can return that everything is okay */
+    else{
+        return ALLOC_OK;
+    }
 }
 
 static alloc_status _mem_resize_node_heap(pool_mgr_pt pool_mgr) {
     // TODO implement
-
-    return ALLOC_FAIL;
+    /* Check to see if we have too many nodes */
+    if((*pool_mgr).used_nodes > (*pool_mgr).total_nodes * MEM_NODE_HEAP_FILL_FACTOR){
+        /* Create a new node_pt that is a reallocated node heap. */
+        /* We use the expand factor to increase the size. This is simply multiplying by 2. */
+        node_pt reallocated_node = (node_pt) realloc((*pool_mgr).node_heap, (*pool_mgr).total_nodes * MEM_NODE_HEAP_EXPAND_FACTOR * sizeof(node_pt));
+        if(reallocated_node == NULL){
+            /* If the allocation failed then return ALLOC_FAIL. */
+            return ALLOC_FAIL;
+        }
+        else{
+            /* Set the node heap to the newly allocated 'reallocated_node' */
+            (*pool_mgr).node_heap = reallocated_node;
+            return ALLOC_OK;
+        }
+    }
+    /* If we are okay on nodes then return okay. */
+    else{
+        return ALLOC_OK;
+    }
 }
 
 static alloc_status _mem_resize_gap_ix(pool_mgr_pt pool_mgr) {
