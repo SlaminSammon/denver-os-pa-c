@@ -44,6 +44,7 @@ typedef struct _pool_mgr {
     unsigned used_nodes;
     gap_pt gap_ix;
     unsigned gap_ix_capacity;
+    unsigned gap_ix_size;
 } pool_mgr_t, *pool_mgr_pt;
 
 
@@ -133,11 +134,16 @@ pool_pt mem_pool_open(size_t size, alloc_policy policy) {
 	}
 
 	pool_store_capacity++;//Increase the amount of pools in the pool_store.
-
-	pool_mgr_pt manager = calloc(1, sizeof(pool_mgr_t));//Create a new pool.
-	if (manager == NULL){
-		return NULL;//If allocation fails yadda yadda ya.
-	}
+    int bool = 0;
+    pool_mgr_pt manager = NULL;
+    /* Loop until allocation succeeds */
+    while(bool == 0){
+        manager = calloc(1, sizeof(pool_mgr_t));//Create a new pool.
+        if (manager != NULL){
+            /* If the allocation succeded escape the loop */
+            bool = 1;
+        }
+    }
 
 	pool_store[pool_store_capacity - 1] = manager;//Place the new pool in the next open place of the pool_store array.
 	//Set pools values
@@ -156,7 +162,7 @@ pool_pt mem_pool_open(size_t size, alloc_policy policy) {
 
 	//Allocate the node heap and gap index
 	(*manager).gap_ix = calloc(MEM_GAP_IX_INIT_CAPACITY, sizeof(gap_t));
-	(*manager).node_heap = calloc(MEM_NODE_HEAP_INIT_CAPACITY, sizeof(gap_t));
+	(*manager).node_heap = calloc(MEM_NODE_HEAP_INIT_CAPACITY, sizeof(node_t));
 	if ((*manager).node_heap == NULL || (*manager).gap_ix == NULL){
 		//Free all allocated memory
 		free((*manager).node_heap);
@@ -171,7 +177,9 @@ pool_pt mem_pool_open(size_t size, alloc_policy policy) {
 	//Initialize all gap and node members.
 	(*manager).total_nodes = MEM_NODE_HEAP_INIT_CAPACITY;
 	(*manager).used_nodes = 0;
-    (*manager).gap_ix_capacity = MEM_GAP_IX_INIT_CAPACITY;
+    (*manager).gap_ix_capacity = 0;
+    //call add to gap ix here once written for a gap the size of the pool
+    (*manager).gap_ix_size = MEM_GAP_IX_INIT_CAPACITY;
 
 
     return (pool_pt) manager;
@@ -205,7 +213,7 @@ alloc_status mem_pool_close(pool_pt pool) {
 	}
 	//If the pool was not found then we cannot deallocate
 	if (manager == NULL){
-		return ALLOC_NOT_FREED;
+		return ALLOC_FAIL;
 	}
 	//If the pool was in the last element of the array
 	if (bool == 1){
@@ -213,6 +221,7 @@ alloc_status mem_pool_close(pool_pt pool) {
 		pool_store[pool_store_capacity - 1] = NULL;
 	}
 	else{
+        /* Swap pool stores, set end node to null. */
 		pool_store[i] = pool_store[pool_store_capacity - 1];
         pool_store[pool_store_capacity - 1] = NULL;
 	}
@@ -314,10 +323,20 @@ static alloc_status _mem_remove_from_gap_ix(pool_mgr_pt pool_mgr,
 
 
 static alloc_status _mem_sort_gap_ix(pool_mgr_pt pool_mgr) {
+    /* This is just a bubble sort that sorts the gaps based on their size. */
+    for(unsigned int i =0; i < (*pool_mgr).gap_ix_capacity-1; ++i){
+        for(unsigned int j = 0; j < (*pool_mgr).gap_ix_capacity-2;++j){
+            /* If the sizes are unordered. */
+            if((*pool_mgr).gap_ix[j].size > (*pool_mgr).gap_ix[j+1].size){
+                /* Swap them :D */
+                gap_t swapper = (*pool_mgr).gap_ix[j];
+                (*pool_mgr).gap_ix[j] = (*pool_mgr).gap_ix[i];
+                (*pool_mgr).gap_ix[i] = swapper;
+            }
+        }
+    }
 
-    // TODO implement
-
-    return ALLOC_FAIL;
+    return ALLOC_OK;
 }
 
 
