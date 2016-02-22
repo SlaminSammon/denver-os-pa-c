@@ -123,7 +123,7 @@ pool_pt mem_pool_open(size_t size, alloc_policy policy) {
     // If the array of pool stores hasn't been allocated then allocate it.
 	if (pool_store == NULL){
 		//if the memory fails to allocate then return NULL.
-		if (mem_init() != ALLOC_FAIL){
+		if (mem_init() == ALLOC_FAIL){
 			return NULL;
 		}
 	}
@@ -302,7 +302,24 @@ static alloc_status _mem_resize_node_heap(pool_mgr_pt pool_mgr) {
 static alloc_status _mem_resize_gap_ix(pool_mgr_pt pool_mgr) {
     // TODO implement
 
-    return ALLOC_FAIL;
+    if((*pool_mgr).used_nodes > (*pool_mgr).total_nodes * MEM_NODE_HEAP_FILL_FACTOR){
+        /* Create a new node_pt that is a reallocated gap index. */
+        /* We use the expand factor to increase the size. This is simply multiplying by 2. */
+        gap_pt reallocated_gap = (gap_pt) realloc((*pool_mgr).gap_ix, (*pool_mgr).gap_ix_size * MEM_GAP_IX_EXPAND_FACTOR * sizeof(gap_pt));
+        if(reallocated_gap == NULL){
+            /* If the allocation failed then return ALLOC_FAIL. */
+            return ALLOC_FAIL;
+        }
+        else{
+            /* Set the node heap to the newly allocated 'reallocated_gap' */
+            (*pool_mgr).gap_ix = reallocated_gap;
+            return ALLOC_OK;
+        }
+    }
+    /* If we are okay on gaps then return okay. */
+    else{
+        return ALLOC_OK;
+    }
 }
 
 static alloc_status _mem_add_to_gap_ix(pool_mgr_pt pool_mgr,
