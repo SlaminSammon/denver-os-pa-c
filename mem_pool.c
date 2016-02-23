@@ -165,7 +165,7 @@ pool_pt mem_pool_open(size_t size, alloc_policy policy) {
 	pool_store[pool_store_capacity - 1] = manager;//Place the new pool in the next open place of the pool_store array.
 	//Set pools values
 	(*manager).pool.policy = policy;
-	(*manager).pool.alloc_size = size;
+	(*manager).pool.total_size = size;
 	(*manager).pool.mem = malloc(size);
 
 	if ((*manager).pool.mem == NULL){
@@ -197,6 +197,14 @@ pool_pt mem_pool_open(size_t size, alloc_policy policy) {
     (*manager).gap_ix_capacity = 1;
     //call add to gap ix here once written for a gap the size of the pool
     (*manager).gap_ix_size = MEM_GAP_IX_INIT_CAPACITY;
+    (*manager).node_heap[0].alloc_record.size = size;
+    (*manager).node_heap[0].allocated = 0;
+    (*manager).node_heap[0].used = 1;
+    (*manager).node_heap[0].prev = NULL;
+    if(_mem_add_to_gap_ix(manager, size, &(*manager).node_heap[0]) == ALLOC_FAIL){
+        printf("Failed to add first node to gap index.");
+        exit(0);
+    }
 
 
     return (pool_pt) manager;
@@ -254,7 +262,51 @@ alloc_status mem_pool_close(pool_pt pool) {
 
 alloc_pt mem_new_alloc(pool_pt pool, size_t size) {
     // TODO implement
-
+    /* Upcast the pool to access the manager */
+    size_t remainSpace = 0;
+    const pool_mgr_pt manager = (pool_mgr_pt) pool;
+    /* If any of these cases are true then exit */
+    if((*manager).gap_ix_capacity == 0 || _mem_resize_node_heap(manager) == ALLOC_FAIL ||
+       (*manager).total_nodes <= (*manager).used_nodes){
+        exit(0);
+    }
+    node_pt newNode = NULL;
+    if(manager->pool.policy == BEST_FIT){}
+    /* First Fit allocation */
+    if(manager->pool.policy == FIRST_FIT){
+        for (unsigned int i = 0; i<(*manager).total_nodes; ++i){
+            /* Find the first empty node in the array. Needs to be able to fit the size we're allocating */
+            if((*manager).node_heap[i].allocated == 0 && (*manager).node_heap[i].alloc_record.size >= size){
+                newNode = &(*manager).node_heap[i];//Set the new node to the found gap.
+                remainSpace = newNode->alloc_record.size - size;//Place the remaining amount of memory into a holder for later
+                break;
+            }
+        }
+    }
+    /* if the node couldn't be allocated return null */
+    if(newNode == NULL){
+        return NULL;
+    }
+    /* remove the node from the gap index */
+    if(_mem_remove_from_gap_ix(manager,size,newNode) != ALLOC_OK){
+        return NULL;
+    }
+    manager->pool.num_allocs++;//Change the amount of allocations to the pool
+    manager->pool.alloc_size += size;
+    /* Alter the nodes values */
+    newNode->used = 1;
+    newNode->allocated = 1;
+    newNode->alloc_record.size = size;
+    /* Check if we need a new node for the next gap or if we don't need a new gap. */
+    if(_mem_resize_node_heap(manager)== ALLOC_FAIL && remainSpace != 0){
+        exit(0);
+    }
+    if(remainSpace != 0){
+        
+    }
+    /****** Start Back Here ******/
+    /*Add the gap that may have been created back t the gap index.
+    
     return NULL;
 }
 
@@ -270,7 +322,7 @@ void mem_inspect_pool(pool_pt pool, pool_segment_pt *segments, unsigned *num_seg
     /* Upcast the pool to a pool manager */
     const pool_mgr_pt manager = (pool_mgr_pt) pool;
     /* Allocate the segments array */
-    segments = calloc((*manager).used_nodes, sizeof(pool_segment_t));
+    pool_segment_pt segs = calloc((*manager).used_nodes, sizeof(pool_segment_t));
     if(segments == NULL){
         return;
     }
@@ -280,11 +332,14 @@ void mem_inspect_pool(pool_pt pool, pool_segment_pt *segments, unsigned *num_seg
         if((*manager).node_heap[i].used == 0){
             continue;//Moves to the next iteration
         }
-        
-        segments[place]->size = (*manager).node_heap[i].alloc_record.size;
-        
-        
+        /* Fill the segments array */
+        segs[place].size = (*manager).node_heap[i].alloc_record.size;
+        segs[place].allocated = (*manager).node_heap[i].allocated;
     }
+    /*pass these values back */
+    *num_segments = (*manager).total_nodes;
+    *segments = segs;
+    return;
     
 }
 
@@ -372,7 +427,7 @@ static alloc_status _mem_add_to_gap_ix(pool_mgr_pt pool_mgr,
     }
     /* Set the nodes values */
     (*node).allocated = 0;
-    (*node).used = 0;
+    (*node).used = 1;
     /* Add the gap to the index and node heap */
     (*pool_mgr).gap_ix[pool_mgr->gap_ix_capacity].node = node;
     (*pool_mgr).gap_ix[pool_mgr->gap_ix_capacity].size = size;
