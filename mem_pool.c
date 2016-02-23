@@ -106,8 +106,25 @@ alloc_status mem_init() {
 
 alloc_status mem_free() {
     // TODO implement
-
-    return ALLOC_FAIL;
+	/* If mem_init hasn't been called yell at things. */
+	if (pool_store == NULL){
+		return ALLOC_CALLED_AGAIN;
+	}
+	/* for all initialized pool managers */
+	for (unsigned int i = 0; i < pool_store_capacity; ++i){
+		/* delete the memory of the poolmgr */
+		mem_pool_close(pool_store[i].pool);
+	}
+	/* free the memory allocated */
+	free(pool_store);
+	if (pool_store != NULL){
+		/* If the deallocation failed return a failure */
+		return ALLOC_FAIL;
+	}
+	/* reset static variables */
+	pool_store_capacity = 0;
+	pool_store_size = 0;
+	return ALLOC_OK;
 }
 
 /*
