@@ -176,8 +176,8 @@ pool_pt mem_pool_open(size_t size, alloc_policy policy) {
 	}
 	//Initialize all gap and node members.
 	(*manager).total_nodes = MEM_NODE_HEAP_INIT_CAPACITY;
-	(*manager).used_nodes = 0;
-    (*manager).gap_ix_capacity = 0;
+	(*manager).used_nodes = 1;
+    (*manager).gap_ix_capacity = 1;
     //call add to gap ix here once written for a gap the size of the pool
     (*manager).gap_ix_size = MEM_GAP_IX_INIT_CAPACITY;
 
@@ -248,8 +248,9 @@ alloc_status mem_del_alloc(pool_pt pool, alloc_pt alloc) {
 }
 
 // NOTE: Allocates a dynamic array. Caller responsible for releasing.
-void mem_inspect_pool(pool_pt pool, pool_segment_pt segments, unsigned *num_segments) {
+void mem_inspect_pool(pool_pt pool, pool_segment_pt *segments, unsigned *num_segments) {
     // TODO implement
+    
 }
 
 
