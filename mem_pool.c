@@ -108,12 +108,12 @@ alloc_status mem_free() {
     // TODO implement
 	/* If mem_init hasn't been called yell at things. */
 	if (pool_store == NULL){
-		return ALLOC_CALLED_AGAIN;
+		return ALL0C_CALLED_AGAIN;
 	}
 	/* for all initialized pool managers */
 	for (unsigned int i = 0; i < pool_store_capacity; ++i){
 		/* delete the memory of the poolmgr */
-		mem_pool_close(pool_store[i].pool);
+		mem_pool_close(&pool_store[i]->pool);
 	}
 	/* free the memory allocated */
 	free(pool_store);
@@ -267,6 +267,24 @@ alloc_status mem_del_alloc(pool_pt pool, alloc_pt alloc) {
 // NOTE: Allocates a dynamic array. Caller responsible for releasing.
 void mem_inspect_pool(pool_pt pool, pool_segment_pt *segments, unsigned *num_segments) {
     // TODO implement
+    /* Upcast the pool to a pool manager */
+    const pool_mgr_pt manager = (pool_mgr_pt) pool;
+    /* Allocate the segments array */
+    segments = calloc((*manager).used_nodes, sizeof(pool_segment_t));
+    if(segments == NULL){
+        return;
+    }
+    int place = 0; // THis is a placeholder for the segments array since it's only the used nodes.
+    for(unsigned int i = 0; i < (*manager).total_nodes;++i){
+        /*Skip all unused nodes */
+        if((*manager).node_heap[i].used == 0){
+            continue;//Moves to the next iteration
+        }
+        
+        segments[place]->size = (*manager).node_heap[i].alloc_record.size;
+        
+        
+    }
     
 }
 
@@ -308,6 +326,7 @@ static alloc_status _mem_resize_node_heap(pool_mgr_pt pool_mgr) {
         else{
             /* Set the node heap to the newly allocated 'reallocated_node' */
             (*pool_mgr).node_heap = reallocated_node;
+            (*pool_mgr).total_nodes *= MEM_NODE_HEAP_EXPAND_FACTOR;
             return ALLOC_OK;
         }
     }
@@ -331,6 +350,7 @@ static alloc_status _mem_resize_gap_ix(pool_mgr_pt pool_mgr) {
         else{
             /* Set the node heap to the newly allocated 'reallocated_gap' */
             (*pool_mgr).gap_ix = reallocated_gap;
+            (*pool_mgr).gap_ix_capacity *= MEM_GAP_IX_EXPAND_FACTOR;
             return ALLOC_OK;
         }
     }
@@ -344,8 +364,23 @@ static alloc_status _mem_add_to_gap_ix(pool_mgr_pt pool_mgr,
                                        size_t size,
                                        node_pt node) {
     // TODO implement
+    /* Check to see if we need to resize */
+    if(pool_mgr->gap_ix_size / pool_mgr->gap_ix_capacity > MEM_GAP_IX_FILL_FACTOR){
+        if(_mem_resize_gap_ix(pool_mgr) == ALLOC_FAIL){
+            return ALLOC_FAIL;
+        }
+    }
+    /* Set the nodes values */
+    (*node).allocated = 0;
+    (*node).used = 0;
+    /* Add the gap to the index and node heap */
+    (*pool_mgr).gap_ix[pool_mgr->gap_ix_capacity].node = node;
+    (*pool_mgr).gap_ix[pool_mgr->gap_ix_capacity].size = size;
+    /*Increase the amount of gaps */
+    (*pool_mgr).gap_ix_capacity++;
+    /* Sort the index */
+    return _mem_sort_gap_ix(pool_mgr);
 
-    return ALLOC_FAIL;
 }
 
 static alloc_status _mem_remove_from_gap_ix(pool_mgr_pt pool_mgr,
