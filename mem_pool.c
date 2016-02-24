@@ -297,17 +297,30 @@ alloc_pt mem_new_alloc(pool_pt pool, size_t size) {
     newNode->used = 1;
     newNode->allocated = 1;
     newNode->alloc_record.size = size;
+    newNode->next = NULL;
+    newNode->alloc_record.mem = malloc(size);
+    node_pt gap_Node = NULL; // Create a new node to hold the node that's going to become the gap.
     /* Check if we need a new node for the next gap or if we don't need a new gap. */
     if(_mem_resize_node_heap(manager)== ALLOC_FAIL && remainSpace != 0){
         exit(0);
     }
     if(remainSpace != 0){
-        
+        for(unsigned i = 0; i< (*manager).total_nodes; ++i){
+            /*Find an unused node */
+            if((*manager).node_heap[i].used == 0){
+                gap_Node = &(*manager).node_heap[i];
+                /* add this node to the gap index with the leftover size from the alloc. */
+                if(_mem_add_to_gap_ix(manager, remainSpace, gap_Node)== ALLOC_FAIL){
+                    exit(0);
+                }
+                break;
+            }
+        }
+        newNode->next = gap_Node;
+        gap_Node->prev = newNode;
     }
-    /****** Start Back Here ******/
-    /*Add the gap that may have been created back t the gap index.
     
-    return NULL;
+    return (alloc_pt) newNode;
 }
 
 alloc_status mem_del_alloc(pool_pt pool, alloc_pt alloc) {
