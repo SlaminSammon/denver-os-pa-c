@@ -84,7 +84,6 @@ static alloc_status _mem_sort_gap_ix(pool_mgr_pt pool_mgr);
 * returns ALLOC_FAIL.
 */
 alloc_status mem_init() {
-    // TODO implement
 
 	//If the pool store already has been initialized
 	//Return the allocation status stating that it already has been initialized.
@@ -105,7 +104,7 @@ alloc_status mem_init() {
 }
 
 alloc_status mem_free() {
-    // TODO implement
+    
 	/* If mem_init hasn't been called yell at things. */
 	if (pool_store == NULL){
 		return ALL0C_CALLED_AGAIN;
@@ -220,7 +219,7 @@ pool_pt mem_pool_open(size_t size, alloc_policy policy) {
  * the pool was not deallocated.
  */
 alloc_status mem_pool_close(pool_pt pool) {
-    // TODO implement
+
     pool_mgr_pt manager= NULL;
 
 	//Go through the pool store array if two pools match then thay
@@ -260,7 +259,7 @@ alloc_status mem_pool_close(pool_pt pool) {
 }
 
 alloc_pt mem_new_alloc(pool_pt pool, size_t size) {
-    // TODO implement
+    
     /* Upcast the pool to access the manager */
     size_t remainSpace = 0;
     const pool_mgr_pt manager = (pool_mgr_pt) pool;
@@ -342,6 +341,7 @@ alloc_pt mem_new_alloc(pool_pt pool, size_t size) {
                 break;
             }
         }
+        /* Increase the used nodes and have the nodes start to point to one another */
         manager->used_nodes++;
         newNode->next = gap_Node;
         gap_Node->prev = newNode;
@@ -356,9 +356,17 @@ alloc_status mem_del_alloc(pool_pt pool, alloc_pt alloc) {
     return ALLOC_FAIL;
 }
 
-// NOTE: Allocates a dynamic array. Caller responsible for releasing.
+/*
+ * Function Name: mem_inspect_pool
+ * Passed Variables: pool_pt pool, pool_segment_pt *segments, unsigned *num_segments
+ * Return Type: void
+ * Purpose: This function is called within main so the contents of the pool
+ * may be displayed in the console. Segments and num_segments are used in
+ * main and are passed back by reference. Segments is an array of all used 
+ * nodes, while num_segments is the amount of used nodes.
+ */
 void mem_inspect_pool(pool_pt pool, pool_segment_pt *segments, unsigned *num_segments) {
-    // TODO implement
+
     /* Upcast the pool to a pool manager */
     const pool_mgr_pt manager = (pool_mgr_pt) pool;
     /* Allocate the segments array */
@@ -384,8 +392,17 @@ void mem_inspect_pool(pool_pt pool, pool_segment_pt *segments, unsigned *num_seg
 
 
 /* Definitions of static functions */
+
+/*
+ * Function Name: _mem_resize_pool_store
+ * Passed Variables: none
+ * Return Type: alloc_status
+ * Purpose: This function takes the current pool store array and determines
+ * whether or not the pool store needs more pool managers. It resizes
+ * this by using the realloc function to reallocate the amount of pool mangers
+ * in the pool store. If this reallocation fails thn we return ALLOC_FAIL.
+ */
 static alloc_status _mem_resize_pool_store() {
-    // TODO implement
     /* Check to see if we have too many pools. */
     if (((float) pool_store_capacity / pool_store_size)> MEM_POOL_STORE_FILL_FACTOR){
         /* Create a new pool manager that is a reallocated 'pool_store' */
@@ -406,8 +423,18 @@ static alloc_status _mem_resize_pool_store() {
     }
 }
 
+/*
+ * Function Name: _mem_resize_node_heap
+ * Passed Variables: pool_mgr_pt pool_mgr
+ * Return Type: alloc_status
+ * Purpose: This function works similarly to the function 
+ * _mem_resize_pool_store. The ultimate difference comes from the fact
+ * that the pool_store is not being resized but instead the node heap is being 
+ * resized.
+ */
+
 static alloc_status _mem_resize_node_heap(pool_mgr_pt pool_mgr) {
-    // TODO implement
+
     /* Check to see if we have too many nodes */
     if((*pool_mgr).used_nodes > (*pool_mgr).total_nodes * MEM_NODE_HEAP_FILL_FACTOR){
         /* Create a new node_pt that is a reallocated node heap. */
@@ -430,8 +457,16 @@ static alloc_status _mem_resize_node_heap(pool_mgr_pt pool_mgr) {
     }
 }
 
+/*
+ * Function Name: _mem_resize_gap_ix
+ * Passed Variables: pool_mgr_pt pool_mgr
+ * Return Type: alloc_status
+ * Purpose: This function works similarly to the function
+ * _mem_resize_pool_store. The ultimate difference comes from the fact
+ * that the pool_store is not being resized but instead the gap index
+ * is being resized.
+ */
 static alloc_status _mem_resize_gap_ix(pool_mgr_pt pool_mgr) {
-    // TODO implement
 
     if((*pool_mgr).used_nodes > (*pool_mgr).total_nodes * MEM_NODE_HEAP_FILL_FACTOR){
         /* Create a new node_pt that is a reallocated gap index. */
@@ -454,10 +489,21 @@ static alloc_status _mem_resize_gap_ix(pool_mgr_pt pool_mgr) {
     }
 }
 
+/*
+ * Function Name: _mem_add_to_gap_ix
+ * Passed Variables: pool_mgr_pt pool_mgr, size_t size, node_pt node
+ * Return Type: alloc_status
+ * Purpose: The purpose of this function is to add anew gap to the gap index.
+ * This gap is a passed as a node from the node index. The first step of the 
+ * function is to check to make sure that we have enough size in the gap index.
+ * Once that is done we place the gap at the fiirst unused position of the 
+ * gap index (gap_ix_capacity). Then any neccesary data members of the gap, node
+ * and pool manager are set. The gap index is then sorted so the biggest gap is at
+ * the top of the index.
+ */
 static alloc_status _mem_add_to_gap_ix(pool_mgr_pt pool_mgr,
                                        size_t size,
                                        node_pt node) {
-    // TODO implement
     /* Check to see if we need to resize */
     if(pool_mgr->gap_ix_capacity != 0 || pool_mgr->gap_ix_capacity / pool_mgr->gap_ix_size > MEM_GAP_IX_FILL_FACTOR){
         if(_mem_resize_gap_ix(pool_mgr) == ALLOC_FAIL){
@@ -478,6 +524,17 @@ static alloc_status _mem_add_to_gap_ix(pool_mgr_pt pool_mgr,
 
 }
 
+/*
+ * Function Name: _mem_remove_from_gap_ix
+ * Passed Variables: pool_mgr_pt pool_mgr, size_t size, node_pt node
+ * Return Type: alloc_status
+ * Purpose: This function removes a gap from the index, which is done
+ * when a node needs to have memory allocated. To find the gap that we
+ * are attempting to remove we use a node pointer and compare it to the
+ * node thta the gap is pointing to. Once this gap is found, we swap it 
+ * with the gap at the bottom of the index, overwrite it's data and then
+ * resort the gap; ending with the gap capacity being decremented.
+ */
 static alloc_status _mem_remove_from_gap_ix(pool_mgr_pt pool_mgr,
                                             size_t size,
                                             node_pt node) {
@@ -505,7 +562,15 @@ static alloc_status _mem_remove_from_gap_ix(pool_mgr_pt pool_mgr,
     return _mem_sort_gap_ix(pool_mgr);
 }
 
-
+/*
+ * Function Name: _mem_sort_gap_ix
+ * Passed Variables: pool_mgr_pt pool_mgr
+ * Return Type: alloc_status
+ * Purpose: This function performs a bubble sort on the gap index
+ * sorting the index based on each gap's size. If the amount of gaps is
+ * smaller than 2 then there is no need to sort the memory and just returns
+ * ALLOC_OK.
+ */
 static alloc_status _mem_sort_gap_ix(pool_mgr_pt pool_mgr) {
     /* This is just a bubble sort that sorts the gaps based on their size. */
     if(((*pool_mgr).gap_ix_capacity <=1)){
