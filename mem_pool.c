@@ -144,13 +144,13 @@ pool_pt mem_pool_open(size_t size, alloc_policy policy) {
 			return NULL;
 		}
 	}
-
+    pool_store_capacity++;//Increase the amount of pools in the pool_store.
 	//CHeck to see if we have the maximum amount of pool_stores or not.
 	if (_mem_resize_pool_store() != ALLOC_OK){
+        pool_store_capacity--;
 		return NULL;//IF it fails then return NULL.
 	}
 
-	pool_store_capacity++;//Increase the amount of pools in the pool_store.
     int bool = 0;
     pool_mgr_pt manager = NULL;
     /* Loop until allocation succeeds */
@@ -194,7 +194,6 @@ pool_pt mem_pool_open(size_t size, alloc_policy policy) {
 	//Initialize all gap and node members.
 	(*manager).total_nodes = MEM_NODE_HEAP_INIT_CAPACITY;
 	(*manager).used_nodes = 1;
-    (*manager).gap_ix_capacity = 1;
     //call add to gap ix here once written for a gap the size of the pool
     (*manager).gap_ix_size = MEM_GAP_IX_INIT_CAPACITY;
     (*manager).node_heap[0].alloc_record.size = size;
@@ -271,7 +270,34 @@ alloc_pt mem_new_alloc(pool_pt pool, size_t size) {
         exit(0);
     }
     node_pt newNode = NULL;
-    if(manager->pool.policy == BEST_FIT){}
+    if(manager->pool.policy == BEST_FIT){
+        /*These values represent the location of the location of the current best gap
+         * and it's size. They are set to the first gap (0) because the gap index is sorted
+         * and that gap is going to have the largest amount of memory possible. */
+        unsigned best_Position = 0;
+        size_t current_Best = (*manager).gap_ix[0].size;
+        for(unsigned i = 0; i < (*manager).gap_ix_capacity; ++i){
+            /*Loop throught the array until we find a gap that is a better fit than the current one */
+            if((*manager).gap_ix[i].size > size && (*manager).gap_ix[i].size < current_Best){
+                best_Position = i;
+                newNode = (*manager).gap_ix[i].node;
+                /*If the gaps size is the exact size of the requested size then break
+                 * since there is no possible way to get a better gap. */
+                if((*manager).gap_ix[i].size ==  size){
+                    break;
+                }
+            }
+            if(i == (*manager).gap_ix_capacity-1){
+                /* If we did not find an optimal gap */
+                if(newNode == NULL){
+                    printf("No gap that has enough memory for allocation");
+                    return NULL;
+                }
+                /*Calculate the remaining gap space */
+                remainSpace = newNode->alloc_record.size - size;
+            }
+        }
+    }
     /* First Fit allocation */
     if(manager->pool.policy == FIRST_FIT){
         for (unsigned int i = 0; i<(*manager).total_nodes; ++i){
@@ -316,6 +342,7 @@ alloc_pt mem_new_alloc(pool_pt pool, size_t size) {
                 break;
             }
         }
+        manager->used_nodes++;
         newNode->next = gap_Node;
         gap_Node->prev = newNode;
     }
@@ -342,15 +369,14 @@ void mem_inspect_pool(pool_pt pool, pool_segment_pt *segments, unsigned *num_seg
     int place = 0; // THis is a placeholder for the segments array since it's only the used nodes.
     for(unsigned int i = 0; i < (*manager).total_nodes;++i){
         /*Skip all unused nodes */
-        if((*manager).node_heap[i].used == 0){
-            continue;//Moves to the next iteration
+        if((*manager).node_heap[i].used == 1){
+            segs[place].size = (*manager).node_heap[i].alloc_record.size;
+            segs[place].allocated = (*manager).node_heap[i].allocated;
+            place++;
         }
-        /* Fill the segments array */
-        segs[place].size = (*manager).node_heap[i].alloc_record.size;
-        segs[place].allocated = (*manager).node_heap[i].allocated;
     }
     /*pass these values back */
-    *num_segments = (*manager).total_nodes;
+    *num_segments = (*manager).used_nodes;
     *segments = segs;
     return;
     
@@ -361,7 +387,7 @@ void mem_inspect_pool(pool_pt pool, pool_segment_pt *segments, unsigned *num_seg
 static alloc_status _mem_resize_pool_store() {
     // TODO implement
     /* Check to see if we have too many pools. */
-    if(pool_store_size > pool_store_capacity * MEM_POOL_STORE_FILL_FACTOR){
+    if (((float) pool_store_capacity / pool_store_size)> MEM_POOL_STORE_FILL_FACTOR){
         /* Create a new pool manager that is a reallocated 'pool_store' */
         pool_mgr_pt* reallocated_store = (pool_mgr_pt *) realloc(pool_store, pool_store_capacity* MEM_POOL_STORE_EXPAND_FACTOR * sizeof(pool_mgr_pt));
         if(reallocated_store == NULL){
@@ -433,7 +459,7 @@ static alloc_status _mem_add_to_gap_ix(pool_mgr_pt pool_mgr,
                                        node_pt node) {
     // TODO implement
     /* Check to see if we need to resize */
-    if(pool_mgr->gap_ix_size / pool_mgr->gap_ix_capacity > MEM_GAP_IX_FILL_FACTOR){
+    if(pool_mgr->gap_ix_capacity != 0 || pool_mgr->gap_ix_capacity / pool_mgr->gap_ix_size > MEM_GAP_IX_FILL_FACTOR){
         if(_mem_resize_gap_ix(pool_mgr) == ALLOC_FAIL){
             return ALLOC_FAIL;
         }
@@ -443,6 +469,7 @@ static alloc_status _mem_add_to_gap_ix(pool_mgr_pt pool_mgr,
     (*node).used = 1;
     /* Add the gap to the index and node heap */
     (*pool_mgr).gap_ix[pool_mgr->gap_ix_capacity].node = node;
+    (*pool_mgr).gap_ix[pool_mgr->gap_ix_capacity].node->alloc_record.size = size;
     (*pool_mgr).gap_ix[pool_mgr->gap_ix_capacity].size = size;
     /*Increase the amount of gaps */
     (*pool_mgr).gap_ix_capacity++;
@@ -454,14 +481,36 @@ static alloc_status _mem_add_to_gap_ix(pool_mgr_pt pool_mgr,
 static alloc_status _mem_remove_from_gap_ix(pool_mgr_pt pool_mgr,
                                             size_t size,
                                             node_pt node) {
-    // TODO implement
+    int gap_Location = -1;
+    /* Loop throught the gap index until we find the gap that is that node. */
+    for(unsigned i = 0; i< pool_mgr->gap_ix_capacity; ++i){
+        /*Once the node is found set the index number to Gap location and break. */
+        if(pool_mgr->gap_ix[i].node == node){
+            gap_Location = i;
+            break;
+        }
+    }
+    /* If the node wasn't found return ALLOC_FAIL */
+    if(gap_Location == -1){
+        return ALLOC_FAIL;
+    }
+    /* Swap the node to be removed with the last filled gap in the index */
+    pool_mgr->gap_ix[gap_Location] = pool_mgr->gap_ix[pool_mgr->gap_ix_capacity -1];
+    /* Delete the node that is now in the last spot of the "filled index. */
+    pool_mgr->gap_ix[pool_mgr->gap_ix_capacity-1].node = NULL;
+    pool_mgr->gap_ix[pool_mgr->gap_ix_capacity-1].size = 0;
+    /* Decrement the amount of used gaps */
+    --pool_mgr->gap_ix_capacity;
 
-    return ALLOC_FAIL;
+    return _mem_sort_gap_ix(pool_mgr);
 }
 
 
 static alloc_status _mem_sort_gap_ix(pool_mgr_pt pool_mgr) {
     /* This is just a bubble sort that sorts the gaps based on their size. */
+    if(((*pool_mgr).gap_ix_capacity <=1)){
+        return ALLOC_OK;
+    }
     for(unsigned int i =0; i < (*pool_mgr).gap_ix_capacity-1; ++i){
         for(unsigned int j = 0; j < (*pool_mgr).gap_ix_capacity-2;++j){
             /* If the sizes are unordered. */

@@ -88,5 +88,5 @@ void print_pool(pool_pt pool) {
     
     free(segs);
     
-    printf("\n");
+    printf("\n\n");
 }
