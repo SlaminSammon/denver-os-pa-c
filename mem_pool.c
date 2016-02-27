@@ -116,6 +116,7 @@ alloc_status mem_free() {
 	}
 	/* free the memory allocated */
 	free(pool_store);
+    pool_store = NULL;
 	if (pool_store != NULL){
 		/* If the deallocation failed return a failure */
 		return ALLOC_FAIL;
@@ -352,8 +353,51 @@ alloc_pt mem_new_alloc(pool_pt pool, size_t size) {
 
 alloc_status mem_del_alloc(pool_pt pool, alloc_pt alloc) {
     // TODO implement
-
-    return ALLOC_FAIL;
+    /*Upcast the pool to a pool manager and alloc to node */
+    const pool_mgr_pt manager = (pool_mgr_pt) pool;
+    node_pt node = (node_pt) alloc;
+    for(int i =0; i< manager ->total_nodes; ++i){
+        /* Find the node with the alloc record. */
+        if(manager->node_heap[i].alloc_record.size == node->alloc_record.size &&
+           manager->node_heap[i].alloc_record.mem == node->alloc_record.mem){
+            /* Set this node to the holder. */
+            node = &manager->node_heap[i];
+            break;
+        }
+        /* We will only get to this point if we do not find the node. */
+        if(i == manager->total_nodes-1){
+            return ALLOC_FAIL;
+        }
+    }
+    /*Check to see if there is a node after the one we are deleting */
+    if(node->next != NULL){
+        /*Check to see if that node is a gap. */
+        if(node->next->used == 1 && node->next->allocated == 0){
+            /*Merge the gaps and delete the "next" node. */
+            node->alloc_record.size += node->next->alloc_record.size;
+            if(_mem_remove_from_gap_ix(manager, node->next->alloc_record.size, node->next) == ALLOC_FAIL){
+                return ALLOC_FAIL;
+            }
+            node->next->used = 0; //This node isn't going to be used anymore so change it's data.
+            manager->used_nodes--;
+            node->next = NULL;
+        }
+    }
+    /*Check to see if this is the first node or not. */
+    if(node->prev !=NULL){
+        /* See if the node before the allocation is a gap */
+        if(node->prev->allocated == 0 && node ->prev->used == 1){
+            /*Edit all metadata */
+            node->prev->alloc_record.size += node->alloc_record.size;
+            node->allocated = 0;
+            node->used =0;
+            manager->used_nodes--;
+            /* Change linked list */
+            node->prev->next = NULL;
+            return ALLOC_OK;
+    }
+    }
+    return _mem_add_to_gap_ix(manager, node->alloc_record.size, node);
 }
 
 /*
