@@ -278,7 +278,7 @@ alloc_pt mem_new_alloc(pool_pt pool, size_t size) {
         size_t current_Best = (*manager).gap_ix[0].size;
         for(unsigned i = 0; i < (*manager).gap_ix_capacity; ++i){
             /*Loop throught the array until we find a gap that is a better fit than the current one */
-            if((*manager).gap_ix[i].size > size && (*manager).gap_ix[i].size < current_Best){
+            if((*manager).gap_ix[i].size > size && (*manager).gap_ix[i].size <= current_Best){
                 best_Position = i;
                 newNode = (*manager).gap_ix[i].node;
                 /*If the gaps size is the exact size of the requested size then break

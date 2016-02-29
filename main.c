@@ -15,7 +15,7 @@ int main(int argc, char *argv[]) {
     
     alloc_status status = mem_init();
     assert(status == ALLOC_OK);
-    pool = mem_pool_open(POOL_SIZE, FIRST_FIT);
+    pool = mem_pool_open(POOL_SIZE, BEST_FIT);
     assert(pool);
     
     /*
