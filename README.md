@@ -37,7 +37,7 @@ Your program should run on a **C11** compatible compiler. Use `gcc` on a Linux s
 
 ### Due date
 
-The assignment is due on **Sun, Feb 28, at 23:59 Mountain time**. The last commit to your PA1 repository before the deadline will be graded.
+The assignment is due on **Sun, Mar 13, at 23:59 Mountain time**. The last commit to your PA1 repository before the deadline will be graded.
 
 ### Honor code
 
@@ -51,7 +51,7 @@ For this assignment, no external libraries should be used, except for the ANSI C
 
 ### Coding style
 
-Familiarize yourself with and start following [coding style guide](http://courses.cms.caltech.edu/cs11/material/c/mike/misc/c_style_guide.html). While you are not expected to follow every point of it, you should try to follow it enought to get a feel for what is good style and bad style. C code can quickly become [unreadable](http://www.ioccc.org/) and difficult to maintain.
+Familiarize yourself with and start the following [coding style guide](http://courses.cms.caltech.edu/cs11/material/c/mike/misc/c_style_guide.html). While you are not expected to follow every point of it, you should try to follow it enought to get a feel for what is good style and bad style. C code can quickly become [unreadable](http://www.ioccc.org/) and difficult to maintain.
 
 ### References
 
@@ -97,9 +97,11 @@ The memory pool will work roughly like the dynamic memory management functions `
 
    This function deallocates the given allocation from the given memory pool.
 
-7. `void mem_inspect_pool(pool_pt pool, pool_segment_pt segments, unsigned *num_segments);`
+7. `void mem_inspect_pool(pool_pt pool, pool_segment_pt *segments, unsigned *num_segments);`
 
-   This function returns a new dynamically allocated array of the pool `segments` (allocations or gaps) in the order in which they are in the pool. The number of segments is returned in `num_segments`. The caller is responsible for freeing the array.
+   This function returns a new dynamically allocated array of the pool `segments` (allocations or gaps) in the order in which they are in the pool. The number of segments is returned in `num_segments`. The caller is responsible for freeing the array
+   
+   **Note:** Fixed bug in signature: `segments` was a single pointer, and has to be double. Fixed and updated in code.
 
 
 #### Data Structures
@@ -153,6 +155,7 @@ The user is not responsible for deallocating the structure.
       unsigned total_nodes;
       unsigned used_nodes;
       gap_pt gap_ix;
+      unsigned gap_ix_capacity;
    } pool_mgr_t, *pool_mgr_pt;
    ```
    **Note:** Notice that the user facing `pool_t` structure is at the top of the internal `pool_mgr_t` structure, meaning that the two structures have the same address, and the same pointer points to both. This allows the pointer to the pool received as an argument to the allocation/deallocation functions to be cast to a pool manager pointer.
@@ -160,6 +163,7 @@ The user is not responsible for deallocating the structure.
    **Behavior & management:**
    1. The pool manager holds pointers to all the required metadata for the memory allocations for a single pool
    2. The functions which make allocations in a given pool have to pass the pool as their first argument.
+   3. The `gap_ix_capacity` is the capacity of the gap index and used to test if the index has to be expanded. If the index is expanded, `gap_ix_capacity` is updated as well.
    
 4. (Linked-list) node heap _(library static)_
 
@@ -217,7 +221,7 @@ The user is not responsible for deallocating the structure.
    ```c
    typedef struct _pool_segment {
       size_t size;
-      unsigned allocated;
+      unsigned long allocated;
    } pool_segment_t, *pool_segment_pt;
    ```
    
@@ -263,3 +267,12 @@ static pool_mgr_pt *pool_store = NULL;
 static unsigned pool_store_size = 0;
 static unsigned pool_store_capacity = 0;
 ```
+
+* * *
+
+### TODO
+
+_this section concerns future editions of the project_
+
+1. Redesign/refactor to return the _memory allocation address (mem)_ to the user from `mem_new_alloc` instead of the allocation record address. The allocation record is embedded in the linked list node, so when the node heap is reallocated, the nodes' (and, thus, the allocation records') addresses shift. The internal infrastructure only requires an adjustment of the linked list pointers and the gap index node pointers, but the allocation record addresses the user has are invalidated. So _mem_ should be returned and not _alloc_.
+

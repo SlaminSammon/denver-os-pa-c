@@ -91,7 +91,7 @@ alloc_status mem_init() {
 	//If the pool store already has been initialized
 	//Return the allocation status stating that it already has been initialized.
 	if (pool_store != NULL){
-		return ALL0C_CALLED_AGAIN;
+		return ALLOC_CALLED_AGAIN;
 	}
 	//Allocate room for the initial amount pool store capacity
 	pool_store = (pool_mgr_pt *)calloc(MEM_POOL_STORE_INIT_CAPACITY, sizeof(pool_mgr_t));
@@ -110,7 +110,7 @@ alloc_status mem_free() {
     
 	/* If mem_init hasn't been called yell at things. */
 	if (pool_store == NULL){
-		return ALL0C_CALLED_AGAIN;
+		return ALLOC_CALLED_AGAIN;
 	}
 	/* for all initialized pool managers */
 	for (unsigned int i = 0; i < pool_store_capacity; ++i){
