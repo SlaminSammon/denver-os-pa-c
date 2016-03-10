@@ -255,34 +255,36 @@ alloc_pt mem_new_alloc(pool_pt pool, size_t size) {
     }
     node_pt newNode = NULL;
     unsigned best_Position = 0;
-    if(manager->pool.policy == BEST_FIT){
+    if(manager->pool.policy == BEST_FIT) {
         /*These values represent the location of the location of the current best gap
          * and it's size. They are set to the first gap (0) because the gap index is sorted
-         * and that gap is going to have the largest amount of memory possible. */
+         * and that gap is going to have the largest amount of memory possible.*/
         size_t current_Best = (*manager).gap_ix[0].size;
-        for(unsigned i = 0; i < (*manager).gap_ix_capacity; ++i){
-            /*Loop throught the array until we find a gap that is a better fit than the current one */
-            if((*manager).gap_ix[i].size >= size && (*manager).gap_ix[i].size <= current_Best){
+        for (unsigned i = 0; i < (*manager).gap_ix_capacity; ++i) {
+            /*Loop throught the array until we find a gap that is a better fit than the current one*/
+            if ((*manager).gap_ix[i].size >= size && (*manager).gap_ix[i].size <= current_Best) {
                 best_Position = i;
                 newNode = (*manager).gap_ix[i].node;
                 current_Best = (*manager).gap_ix[i].size;
                 /*If the gaps size is the exact size of the requested size then break
-                 * since there is no possible way to get a better gap. */
-                if((*manager).gap_ix[i].size ==  size){
+                 * since there is no possible way to get a better gap.*/
+                if ((*manager).gap_ix[i].size == size) {
                     break;
                 }
             }
-            if(i == (*manager).gap_ix_capacity-1){
-                /* If we did not find an optimal gap */
-                if(newNode == NULL){
+            if (i == (*manager).gap_ix_capacity - 1) {
+                //If we did not find an optimal gap
+                if (newNode == NULL) {
                     printf("No gap that has enough memory for allocation");
                     return NULL;
                 }
-                /*Calculate the remaining gap space */
+                //Calculate the remaining gap space
                 remainSpace = newNode->alloc_record.size - size;
             }
         }
     }
+
+
     /* First Fit allocation */
     if(manager->pool.policy == FIRST_FIT){
         for (unsigned int i = 0; i<(*manager).total_nodes; ++i){
