@@ -67,7 +67,6 @@ static void check_pool(pool_pt pool, const pool_segment_pt exp) {
     for (unsigned u = 0; u < size; u ++)
         printf("%10lu - %s\n", (unsigned long) segs[u].size, (segs[u].allocated) ? "alloc" : "gap");
 #endif
-
     assert_memory_equal(exp, segs, size * sizeof(pool_segment_t));
 
     if (segs) free(segs);
@@ -302,7 +301,7 @@ static void test_pool_ff_metadata(void **state) {
             }; // three allocations: 100, 1000, 10000
     check_metadata(pool, FIRST_FIT, POOL_SIZE, 11100, 3, 1);
 
-
+    //here
     // 5. deallocate 1000
     status = mem_del_alloc(pool, alloc1);
     assert_int_equal(status, ALLOC_OK);
